@@ -11,28 +11,11 @@ import ultimate
 import login
 import decode
 import altfuncs
-import re, urllib2
+import re
 from collections import deque
 
 import time
 
-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#(autocatch)#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
-def autocatch():
-    print 'indicate the url : '
-    url=raw_input()
-    mykey = urllib2.urlopen(url)
-    take = open("queue_.txt", "w")
-
-    for text in mykey:
-        match = re.search('<a href="/(.+?)" title=', text)
-        if match:
-            print >> take, 'http://www.crunchyroll.com/'+match.group(1)
-
-    take.close()
-
-    with open('queue_.txt') as f,  open('queue.txt', 'w') as fout:
-        fout.writelines(reversed(f.readlines()))
-    os.remove('queue_.txt')
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#(CHECKING)#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 if not os.path.exists("export"):
     os.makedirs("export")
@@ -43,10 +26,12 @@ ilang2 = 'English'
 iforcesub = False
 iforceusa = False
 ilocalizecookies = False
-ionlymainsub=False
-def defaultsettings(vvquality, vlang1, vlang2, vforcesub, vforceusa, vlocalizecookies, onlymainsub):
+ionlymainsub = False
+iconnection_n_ = 1
+iproxy_ = ''
+def defaultsettings(vvquality, vlang1, vlang2, vforcesub, vforceusa, vlocalizecookies, onlymainsub, vconnection_n_,vproxy_):
     dsettings='''[SETTINGS]
-# Set this to the preferred quality. Possible values are: "android" (hard-subbed), "360p", "480p", "720p", "1080p", or "highest" for highest available.
+# Set this to the preferred quality. Possible values are: "240p" , "360p", "480p", "720p", "1080p", or "highest" for highest available.
 # Note that any quality higher than 360p still requires premium, unless it's available that way for free (some first episodes).
 # We're not miracle workers.
 video_quality = '''+vvquality+'''
@@ -63,11 +48,15 @@ forceusa = '''+str(vforceusa)+'''
 localizecookies = '''+str(vlocalizecookies)+'''
 # Set this if you only want to mux one subtitle only (this so make easy for some devices like TVs to play subtitle)
 onlymainsub='''+str(onlymainsub)+'''
+# Set this option to increase the Number of the connection
+connection_n_='''+str(vconnection_n_)+'''
+# Set this option to use proxy, example: 80.80.80.80:8080
+Proxy = '''+vproxy_+'''
 '''
     open('.\\settings.ini', 'w').write(dsettings.encode('utf-8'))
 
 if not os.path.exists(".\\settings.ini"):
-    defaultsettings(iquality, ilang1, ilang2, iforcesub, iforceusa, ilocalizecookies, ionlymainsub)
+    defaultsettings(iquality, ilang1, ilang2, iforcesub, iforceusa, ilocalizecookies, ionlymainsub, iconnection_n_, iproxy_)
 	
 if not os.path.exists(".\\cookies"):
     if raw_input(u'Do you have an account [Y/N]?').lower() == 'y':
@@ -76,6 +65,7 @@ if not os.path.exists(".\\cookies"):
         login.login(username, password)
     else:
         login.login('', '')
+    userstatus = login.getuserstatus()
 else:
     userstatus = login.getuserstatus()
     print 'User Name='+userstatus[1]
@@ -103,7 +93,11 @@ def queueu(queuepath):
     for line in lines:
         if line.rstrip('\n') ==''.join(line.rstrip('\n').split('#', 1)):
             #print ''.join(line.rstrip('\n').split('#', 1))
-            ultimate.ultimate(line.rstrip('\n'), '', '')
+            try:
+                ultimate.ultimate(line.rstrip('\n'), '', '')
+            except:		# old file will be used as backup
+                import ultimate_old
+                ultimate_old.ultimate(line.rstrip('\n'), '', '')
             for i in range(0, len(lines)):
                 if lines[i]== line:
                     lines[i]='#'+lines[i]
@@ -160,10 +154,10 @@ def Languages_(Varname_):
         Languages_()
 
 def videoquality_():
-    slang1, slang2, sforcesub, sforceusa, slocalizecookies, vquality, vonlymainsub = altfuncs.config()
+    vquality = altfuncs.config()[5]
     seleccion = 5
     print '''Set This To The Preferred Quality:
-0.- android (hard-subbed)
+0.- android (240p)
 1.- 360p
 2.- 480p
 3.- 720p
@@ -178,7 +172,7 @@ We're Not Miracle Workers.
         print "ERROR: Invalid option."
         videoquality_()
     if seleccion == 0 :
-        return 'android'
+        return '240p'
     elif seleccion == 1 :
         return '360p'
     elif seleccion == 2 :
@@ -193,7 +187,7 @@ We're Not Miracle Workers.
         print "ERROR: Invalid option."
         videoquality_()
 def settings_():
-    slang1, slang2, sforcesub, sforceusa, slocalizecookies, vquality, vonlymainsub = altfuncs.config()
+    slang1, slang2, sforcesub, sforceusa, slocalizecookies, vquality, vonlymainsub, vconnection_n_,vproxy_ = altfuncs.config()
     slang1 = {u'Español (Espana)' : 'Espanol_Espana', u'Français (France)' : 'Francais', u'Português (Brasil)' : 'Portugues',
             u'English' : 'English', u'Español' : 'Espanol', u'Türkçe' : 'Turkce', u'Italiano' : 'Italiano',
             u'العربية' : 'Arabic', u'Deutsch' : 'Deutsch'}[slang1]
@@ -214,11 +208,13 @@ def settings_():
 1.- Video Quality = '''+vquality+'''
 2.- Primary Language = '''+slang1_+'''
 3.- Secondary Language = '''+slang2_+'''
-4.- Force Subtitle = '''+str(sforcesub)+'''		#Use --forced-track in Subtitle
+4.- Hard Subtitle = '''+str(sforcesub)+'''		#The Video will have 1 hard subtitle
 5.- USA Proxy = '''+str(sforceusa)+'''			#use a US session ID
 6.- Localize cookies = '''+str(slocalizecookies)+'''		#Localize the cookies (Experiment)
 7.- Only One Subtitle = '''+str(vonlymainsub)+'''		#Only download Primary Language
-8.- Restore Default Settings
+8.- Change the Number of The Download Connection = '''+str(vconnection_n_)+'''
+9.- use proxy(it disable if left blank)  = '''+vproxy_+'''  #ex:80.80.80.80:8080
+10.- Restore Default Settings
 '''
     try:
         seleccion = int(input("> "))
@@ -227,46 +223,55 @@ def settings_():
         settings_()
     if seleccion == 1 :
         vquality = videoquality_()
-        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub)
+        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub, vconnection_n_, vproxy_)
         settings_()
     elif seleccion == 2 :
         slang1 = Languages_('slang1')
-        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub)
+        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub, vconnection_n_, vproxy_)
         settings_()
     elif seleccion == 3 :
         slang2 = Languages_('slang2')
-        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub)
+        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub, vconnection_n_, vproxy_)
         settings_()
     elif seleccion == 4 :
         if sforcesub:
             sforcesub = False
         else:
             sforcesub = True
-        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub)
+        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub, vconnection_n_, vproxy_)
         settings_()
     elif seleccion == 5 :
         if sforceusa:
             sforceusa = False
         else:
             sforceusa = True
-        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub)
+        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub, vconnection_n_, vproxy_)
         settings_()
     elif seleccion == 6 :
         if slocalizecookies:
             slocalizecookies = False
         else:
             slocalizecookies = True
-        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub)
+        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub, vconnection_n_, vproxy_)
         settings_()
     elif seleccion == 7 :
         if vonlymainsub:
             vonlymainsub = False
         else:
             vonlymainsub = True
-        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub)
+        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub, vconnection_n_, vproxy_)
         settings_()
     elif seleccion == 8 :
-        defaultsettings(iquality, ilang1, ilang2, iforcesub, iforceusa, ilocalizecookies, ionlymainsub)
+        vconnection_n_ = raw_input(u'Please Input The Download Connection Nymber: ')
+        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub, vconnection_n_, vproxy_)
+        settings_()
+    elif seleccion == 9 :
+        vproxy_ = raw_input(u'Please Input The Proxy: ')
+        defaultsettings(vquality, slang1, slang2, sforcesub, sforceusa, slocalizecookies, vonlymainsub, vconnection_n_, vproxy_)
+        login.getuserstatus(True)
+        settings_()
+    elif seleccion == 10 :
+        defaultsettings(iquality, ilang1, ilang2, iforcesub, iforceusa, ilocalizecookies, ionlymainsub, iconnection_n_, iproxy_)
         settings_()
     elif seleccion == 0 :
         pass
@@ -299,7 +304,13 @@ def makechoise():
         print "ERROR: Invalid option."
         makechoise()
     if seleccion == 1 :
-        ultimate.ultimate(raw_input('Please enter Crunchyroll video URL:\n'), '', '')
+        ani_url = raw_input('Please enter Crunchyroll video URL:\n')
+        ultimate.ultimate(ani_url, '', '')
+        try:
+            pass#ultimate.ultimate(ani_url, '', '')
+        except:		# old file will be used as backup
+            import ultimate_old
+            ultimate_old.ultimate(ani_url, '', '')
     elif seleccion == 2 :
         decode.decode(raw_input('Please enter Crunchyroll video URL:\n'))
     elif seleccion == 3 :
@@ -311,7 +322,7 @@ def makechoise():
         login.login('', '')
         makechoise()
     elif seleccion == 5 :
-        autocatch()
+        altfuncs.autocatch()
         queueu('.\\queue.txt')
     elif seleccion == 6 :
         queueu('.\\queue.txt')
@@ -332,6 +343,7 @@ def makechoise():
                 pass
         print "ERROR: Invalid option."
         makechoise()
+    makechoise()
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#(    )#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 if arg.url:
     page_url = arg.url
@@ -359,12 +371,16 @@ if arg.subs_only:
         decode.decode(raw_input('Please enter Crunchyroll video URL:\n'))
     sys.exit()
 if arg.default_settings:
-    defaultsettings(iquality, ilang1, ilang2, iforcesub, iforceusa, ilocalizecookies)
+    defaultsettings(iquality, ilang1, ilang2, iforcesub, iforceusa, ilocalizecookies, ionlymainsub, iconnection_n_, iprpxy_)
     sys.exit()
 if arg.queue:
     queueu(arg.queue)
 if arg.url and not arg.subs_only:
-    ultimate.ultimate(page_url, seasonnum, epnum)
+    try:
+        ultimate.ultimate(page_url, seasonnum, epnum)
+    except:		# old file will be used as backup
+        import ultimate_old
+        ultimate_old.ultimate(page_url, seasonnum, epnum)
 else:
     makechoise()
 

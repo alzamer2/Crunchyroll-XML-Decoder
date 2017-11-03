@@ -2,7 +2,9 @@ from hashlib import sha1
 from zlib import decompress
 from base64 import b64decode
 from bs4 import BeautifulSoup
-from Crypto.Cipher import AES
+#from Crypto.Cipher import AES
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
 
 
 class CrunchyDec:
@@ -76,6 +78,11 @@ class CrunchyDec:
         key = sha1('$&).6CXzPHw=2N_+isZK' + str(eq)).digest()+'\x00'*12
         iv = b64decode(iv)
         data = b64decode(data)
-        cipher = AES.new(key, AES.MODE_CBC, iv)
-        decrypteddata = cipher.decrypt(data)
+        backend = default_backend()
+        #cipher = AES.new(key, AES.MODE_CBC, iv)
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=backend)
+        decryptor = cipher.decryptor()
+        #decrypteddata = cipher.decrypt(data)
+        decrypteddata = decryptor.update(data) + decryptor.finalize()
         return decompress(decrypteddata)
+

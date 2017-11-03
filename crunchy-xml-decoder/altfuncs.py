@@ -6,7 +6,6 @@ from time import sleep
 import urlparse
 from ConfigParser import ConfigParser
 import pickle
-
 import requests
 
 
@@ -16,7 +15,7 @@ def config():
     configr = ConfigParser()
     configr.read('settings.ini')
     quality = configr.get('SETTINGS', 'video_quality')
-    qualities = {'android': ['107', '71'], '360p': ['106', '60'], '480p': ['106', '61'],
+    qualities = {'240p': ['107', '71'], '360p': ['106', '60'], '480p': ['106', '61'],
                  '720p': ['106', '62'], '1080p': ['108', '80'], 'highest': ['0', '0']}
     video_format = qualities[quality][0]
     resolution = qualities[quality][1]
@@ -35,7 +34,9 @@ def config():
     global localizecookies
     localizecookies = configr.getboolean('SETTINGS', 'localizecookies')
     onlymainsub = configr.getboolean('SETTINGS', 'onlymainsub')
-    return [lang, lang2, forcesub, forceusa, localizecookies, quality, onlymainsub]
+    connection_n_ = int(configr.get('SETTINGS', 'connection_n_'))
+    proxy_ = configr.get('SETTINGS', 'Proxy')
+    return [lang, lang2, forcesub, forceusa, localizecookies, quality, onlymainsub, connection_n_, proxy_]
 
 
 #def playerrev(url):
@@ -55,7 +56,7 @@ def config():
 #    return player_revision
 
 
-def gethtml(url):
+def gethtml_old(url):
     with open('cookies') as f:
         cookies = requests.utils.cookiejar_from_dict(pickle.load(f))
         session = requests.session()
@@ -67,10 +68,15 @@ def gethtml(url):
                                         u'العربية' : 'arME' , u'Deutsch' : 'deDE'}[lang]
         if forceusa:
             try:
-                session.cookies['sess_id'] = requests.get('http://www.crunblocker.com/sess_id.php').text
+                session.cookies['sess_id'] = session.cookies['usa_sess_id']
             except:
-                sleep(10)  # sleep so we don't overload crunblocker
-                session.cookies['sess_id'] = requests.get('http://www.crunblocker.com/sess_id.php').text
+                print 'get new season id'
+                try:
+                    session.cookies['sess_id'] = requests.get('https://cr.onestay.moe/getid').json()['sessionId'].encode('ascii', 'ignore')
+                    #print 'I recommend to re-login so we don\'t overload crunchyroll unblocker'
+                except:
+                    sleep(10)  # sleep so we don't overload crunblocker
+                    session.cookies['sess_id'] = requests.get('https://rubbix.net/crunchyroll/').json()['sessionId'].encode('ascii', 'ignore')
     parts = urlparse.urlsplit(url)
     if not parts.scheme or not parts.netloc:
         print 'Apparently not a URL'
@@ -82,7 +88,7 @@ def gethtml(url):
     return res.text
 
 
-def getxml(req, med_id):
+def getxml_old(req, med_id):
     url = 'http://www.crunchyroll.com/xml/'
     if req == 'RpcApiSubtitle_GetXml':
         payload = {'req': 'RpcApiSubtitle_GetXml', 'subtitle_script_id': med_id}
@@ -103,15 +109,22 @@ def getxml(req, med_id):
                                         u'العربية' : 'arME' , u'Deutsch' : 'deDE'}[lang]
         if forceusa:
             try:
-                session.cookies['sess_id'] = requests.get('http://www.crunblocker.com/sess_id.php').text
+                session.cookies['sess_id'] = session.cookies['usa_sess_id']
             except:
-                sleep(10)  # sleep so we don't overload crunblocker
-                session.cookies['sess_id'] = requests.get('http://www.crunblocker.com/sess_id.php').text
+                print 'get new season id'
+                try:
+                    session.cookies['sess_id'] = requests.get('https://cr.onestay.moe/getid').json()['sessionId'].encode('ascii', 'ignore')
+                    #print 'I recommend to re-login so we don\'t overload crunchyroll unblocker'
+                except:
+                    sleep(10)  # sleep so we don't overload crunblocker
+                    session.cookies['sess_id'] = requests.get('https://rubbix.net/crunchyroll/').json()['sessionId'].encode('ascii', 'ignore')
+                    #print 'I recommend to re-login so we don\'t overload crunchyroll unblocker'
     headers = {'Referer': 'http://static.ak.crunchyroll.com/versioned_assets/ChromelessPlayerApp.17821a0e.swf',
                'Host': 'www.crunchyroll.com', 'Content-type': 'application/x-www-form-urlencoded',
                'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; rv:26.0) Gecko/20100101 Firefox/26.0)'}
     res = session.post(url, params=payload, headers=headers)
     res.encoding = 'UTF-8'
+    #print session.cookies
     return res.text
 
 
@@ -150,3 +163,114 @@ def vidurl(url, season, ep):  # experimental, although it does help if you only 
         # epnum = sys.argv[2]
         return 'http://www.crunchyroll.com' + \
                re.findall('<a href=\"(.+?)\" .+ class=\"portrait-element block-link titlefix episode\"', res)[int(ep)]
+
+def autocatch():
+    url = raw_input(u'indicate the url : ')
+    session = requests.session()
+    cookies_ = ConfigParser()
+    cookies_.read('cookies')
+    sess_id_ = cookies_.get('COOKIES', 'sess_id')
+    if forceusa:
+        sess_id_ = cookies_.get('COOKIES', 'sess_id_usa')
+    payload = {'session_id' : sess_id_, 'media_type' : 'anime','fields':'series.url,series.series_id','limit':'1500','filter':'alpha'}
+    list_series = session.post('http://api.crunchyroll.com/list_series.0.json', data=payload).json()
+    #print list_series['data'][877],len(list_series['data'])
+    series_id = ''
+    for i in list_series['data']:
+        if url == i['url']:
+                series_id = i['series_id']
+    payload = {'session_id' : sess_id_, 'series_id': series_id,'fields':'media.url','limit':'1500'}
+    list_media = session.post('http://api.crunchyroll.com/list_media.0.json', data=payload).json()
+    aList = []
+    take = open("queue.txt", "w")
+    take.write(u'#the any line that has hash before the link will be skiped\n')
+    aList.reverse()
+    for i in list_media['data']:
+        print >> take, i['url']
+    take.close()
+
+def gethtml(url):
+    #with open('cookies') as f:
+    #cookies = requests.utils.cookiejar_from_dict(pickle.load(f))
+    session = requests.session()
+    #session.cookies = cookies
+    cookies_ = ConfigParser()
+    cookies_.read('cookies')
+    session.cookies['sess_id'] = cookies_.get('COOKIES', 'sess_id')
+    if forceusa:
+        session.cookies['sess_id'] = cookies_.get('COOKIES', 'sess_id_usa')
+    del session.cookies['c_visitor']
+    if not forceusa and localizecookies:
+        session.cookies['c_locale']={u'Español (Espana)' : 'esES', u'Français (France)' : 'frFR', u'Português (Brasil)' : 'ptBR',
+                                    u'English' : 'enUS', u'Español' : 'esLA', u'Türkçe' : 'enUS', u'Italiano' : 'itIT',
+                                    u'العربية' : 'arME' , u'Deutsch' : 'deDE'}[lang]
+    '''
+    if forceusa:
+        try:
+            session.cookies['sess_id'] = session.cookies['usa_sess_id']
+        except:
+            print 'get new season id'
+            try:
+                session.cookies['sess_id'] = requests.get('https://cr.onestay.moe/getid').json()['sessionId'].encode('ascii', 'ignore')
+                #print 'I recommend to re-login so we don\'t overload crunchyroll unblocker'
+            except:
+                sleep(10)  # sleep so we don't overload crunblocker
+                session.cookies['sess_id'] = requests.get('https://rubbix.net/crunchyroll/').json()['sessionId'].encode('ascii', 'ignore')
+    '''
+    parts = urlparse.urlsplit(url)
+    if not parts.scheme or not parts.netloc:
+        print 'Apparently not a URL'
+        sys.exit()
+    data = {'Referer': 'http://crunchyroll.com/', 'Host': 'www.crunchyroll.com',
+            'User-Agent': 'Mozilla/5.0  Windows NT 6.1; rv:26.0 Gecko/20100101 Firefox/26.0'}
+    res = session.get(url, params=data)
+    res.encoding = 'UTF-8'
+    return res.text
+
+
+def getxml(req, med_id):
+    url = 'http://www.crunchyroll.com/xml/'
+    if req == 'RpcApiSubtitle_GetXml':
+        payload = {'req': 'RpcApiSubtitle_GetXml', 'subtitle_script_id': med_id}
+    elif req == 'RpcApiVideoPlayer_GetStandardConfig':
+        payload = {'req': 'RpcApiVideoPlayer_GetStandardConfig', 'media_id': med_id, 'video_format': video_format,
+                   'video_quality': resolution, 'auto_play': '1', 'show_pop_out_controls': '1',
+                   'current_page': 'http://www.crunchyroll.com/'}
+    else:
+        payload = {'req': req, 'media_id': med_id, 'video_format': video_format, 'video_encode_quality': resolution}
+    #with open('cookies') as f:
+    #cookies = requests.utils.cookiejar_from_dict(pickle.load(f))
+    session = requests.session()
+    #session.cookies = cookies
+    cookies_ = ConfigParser()
+    cookies_.read('cookies')
+    session.cookies['sess_id'] = cookies_.get('COOKIES', 'sess_id')
+    if forceusa:
+        session.cookies['sess_id'] = cookies_.get('COOKIES', 'sess_id_usa')
+    del session.cookies['c_visitor']
+    if not forceusa and localizecookies:
+        session.cookies['c_locale']={u'Español (Espana)' : 'esES', u'Français (France)' : 'frFR', u'Português (Brasil)' : 'ptBR',
+                                    u'English' : 'enUS', u'Español' : 'esLA', u'Türkçe' : 'enUS', u'Italiano' : 'itIT',
+                                    u'العربية' : 'arME' , u'Deutsch' : 'deDE'}[lang]
+    '''
+    if forceusa:
+        try:
+            session.cookies['sess_id'] = session.cookies['usa_sess_id']
+        except:
+            print 'get new season id'
+            try:
+                session.cookies['sess_id'] = requests.get('https://cr.onestay.moe/getid').json()['sessionId'].encode('ascii', 'ignore')
+                #print 'I recommend to re-login so we don\'t overload crunchyroll unblocker'
+            except:
+                sleep(10)  # sleep so we don't overload crunblocker
+                session.cookies['sess_id'] = requests.get('https://rubbix.net/crunchyroll/').json()['sessionId'].encode('ascii', 'ignore')
+                #print 'I recommend to re-login so we don\'t overload crunchyroll unblocker'
+    '''
+    headers = {'Referer': 'http://static.ak.crunchyroll.com/versioned_assets/ChromelessPlayerApp.17821a0e.swf',
+               'Host': 'www.crunchyroll.com', 'Content-type': 'application/x-www-form-urlencoded',
+               'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; rv:26.0) Gecko/20100101 Firefox/26.0)'}
+    res = session.post(url, params=payload, headers=headers)
+    res.encoding = 'UTF-8'
+    #print session.cookies
+    return res.text
+

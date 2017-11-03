@@ -1,70 +1,92 @@
 import sys
 import re
 import requests
-import pickle
-import cfscrape
 from getpass import getpass
+from ConfigParser import ConfigParser
+import random
+import string
+import altfuncs
 
-def getuserstatus(session=''):
+def getuserstatus(sess_id_renew = False,sess_id_usa=''):
     status = 'Guest'
     user1 = 'Guest'
-    if session == '':
-        session = cfscrape.create_scraper()
-        with open('cookies') as f:
-            cookies = requests.utils.cookiejar_from_dict(pickle.load(f))
-            session = requests.session()
-            session.cookies = cookies
-            del session.cookies['c_visitor']
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.2; WOW64; rv:34.0) Gecko/20100101 Firefox/34.0',
-               'Connection': 'keep-alive'}
-    site = session.get('https://www.crunchyroll.com/acct/membership', headers=headers, verify=True).text
-    #open('tempfile','w').write(site.encode('UTF-8'))
-    if re.search(re.escape('      ga(\'set\', \'dimension5\', \'registered\');'), site):
-        status = 'Free Member'
-    elif re.search(re.escape('      ga(\'set\', \'dimension6\', \'premium\');'), site):
-        status = 'Premium Member'
-    elif re.search(re.escape('      ga(\'set\', \'dimension6\', \'premiumplus\');'), site):
-        status = 'Premium+ Member'
-    if status != 'Guest':
-        user1 = re.findall('<a href=\"/user/(.+)\" ', site).pop()
+    session = requests.session()
+    cookies_ = ConfigParser()
+    if sess_id_usa=='':
+        cookies_.read('cookies')
+        sess_id_usa = cookies_.get('COOKIES', 'sess_id_usa')
+        sess_id_ = cookies_.get('COOKIES', 'sess_id')
+        auth = cookies_.get('COOKIES', 'auth')
+    if sess_id_renew:
+        session.get('http://api.crunchyroll.com/end_session.0.json?session_id='+sess_id_usa).json()
+        session.get('http://api.crunchyroll.com/end_session.0.json?session_id='+sess_id_).json()
+    checkusaid = session.get('http://api.crunchyroll.com/start_session.0.json?session_id='+sess_id_usa).json()
+    if checkusaid['code'] == 'ok':
+        if checkusaid['data']['user'] != None:
+            user1 = checkusaid['data']['user']['username']
+            if checkusaid['data']['user']['premium'] == '':
+                status = 'Free Member'
+            else:  # later will add Premium+ status
+                status = 'Premium'
+    else:
+        #print checkusaid['data']['user']
+        payload = {'device_id': ''.join(random.sample(string.ascii_letters + string.digits, 32)),'api_ver': '1.0','device_type': 'com.crunchyroll.iphone','access_token': 'QWjz212GspMHH9h','version': '2313.8','locale': 'jaJP','duration': '9999999999', 'auth' : auth}
+        payload_t = {'device_id': ''.join(random.sample(string.ascii_letters + string.digits, 32)),'api_ver': '1.0','device_type': 'com.crunchyroll.iphone','access_token': 'QWjz212GspMHH9h'}
+        if altfuncs.config()[8] != '':
+            proxies = {'http': altfuncs.config()[8]}
+        else:
+            proxies = {}
+        #print session.get('http://api-manga.crunchyroll.com/cr_start_session', data=payload_t)
+        checkusaid2 = session.post('http://api-manga.crunchyroll.com/cr_start_session', data=payload).json()
+        sess_id_usa = checkusaid2['data']['session_id'].encode('ascii', 'ignore')
+        try:
+            sess_id_ = session.post('http://api.crunchyroll.com/start_session.0.json', proxies=proxies, data=payload).json()['data']['session_id'].encode('ascii', 'ignore')
+        except requests.exceptions.ProxyError:
+            sess_id_ = session.post('http://api.crunchyroll.com/start_session.0.json', data=payload).json()['data']['session_id'].encode('ascii', 'ignore')
+        open("cookies", "w").write('[COOKIES]\nsess_id = '+sess_id_+'\nsess_id_usa = '+sess_id_usa+'\nauth = '+auth)
+        if checkusaid2['data']['user'] != None:
+            user1 = checkusaid2['data']['user']['username']
+            if checkusaid2['data']['user']['premium'] == '':
+                status = 'Free Member'
+            else:  # later will add Premium+ status
+                status = 'Premium'
     return [status,user1]
 
 def login(username, password):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.2; WOW64; rv:34.0) Gecko/20100101 Firefox/34.0',
-               'Connection': 'keep-alive'}
-    session = cfscrape.create_scraper()
-    res_get = session.get('https://www.crunchyroll.com/login', headers=headers)
-
-    s = re.search('name="login_form\\[_token\\]" value="([^"]*)"', res_get.text)
-    if s is None:
-       print 'CSRF token not found'
-       sys.exit()
-    token = s.group(1)
-
-    payload = {'login_form[redirect_url]': '/',
-               'login_form[name]': username,
-               'login_form[password]': password,
-               'login_form[_token]': token}
-
-    res_post = session.post('https://www.crunchyroll.com/login', data=payload, headers=headers, allow_redirects = False)
-    if not (res_post.status_code == 302 or (res_post.status_code == 200 and username == '')):
-      print 'Login failed'
-      sys.exit()
-
-    for c in session.cookies:
-        c.expires = 9999999999  # Saturday, November 20th 2286, 17:46:39 (GMT)
-
-    del session.cookies['c_visitor']
-
-    userstatus = getuserstatus(session)
-    if username != '' and userstatus[1] == 'Guest':
-        print 'Login failed.'
-        sys.exit()
+    session = requests.session()
+    payload = {'device_id': ''.join(random.sample(string.ascii_letters + string.digits, 32)),'api_ver': '1.0','device_type': 'com.crunchyroll.iphone','access_token': 'QWjz212GspMHH9h','version': '2313.8','locale': 'jaJP','duration': '9999999999'}
+    if altfuncs.config()[8] != '':
+        proxies = {'http': altfuncs.config()[8]}
     else:
-        print 'Login as '+userstatus[0]+' successfully.'
-        pickle.dump(requests.utils.dict_from_cookiejar(session.cookies), open('cookies', 'w'))
-        with open('cookies', 'w') as f:
-            pickle.dump(requests.utils.dict_from_cookiejar(session.cookies), f)
+        proxies = {}
+    sess_id_usa = session.post('http://api-manga.crunchyroll.com/cr_start_session', data=payload).json()['data']['session_id'].encode('ascii', 'ignore')
+    try:
+        sess_id_ = session.post('http://api.crunchyroll.com/start_session.0.json', proxies=proxies, data=payload).json()['data']['session_id'].encode('ascii', 'ignore')
+    except requests.exceptions.ProxyError:
+        sess_id_ = session.post('http://api.crunchyroll.com/start_session.0.json', data=payload).json()['data']['session_id'].encode('ascii', 'ignore')
+#for now we dont need unblocker server
+    '''
+    try:
+        session.cookies['usa_sess_id'] = requests.get('https://cr.onestay.moe/getid').json()['sessionId'].encode('ascii', 'ignore')
+    except:
+        sleep(10)  # sleep so we don't overload crunblocker
+        session.cookies['usa_sess_id'] = requests.get('http://rssfeedfilter.netne.net/').json()['sessionId'].encode('ascii', 'ignore')
+    '''
+    auth = ''
+    if username and password != '':
+        payload = {'session_id' : sess_id_usa,'locale': 'jaJP','duration': '9999999999','account' : username, 'password' : password}
+        try:
+            auth = session.post('https://api.crunchyroll.com/login.0.json', data=payload).json()['data']['auth'].encode('ascii', 'ignore')
+        except:
+            pass
+    userstatus = getuserstatus(False,sess_id_usa)
+    if username != '' and userstatus[0] == 'Guest':
+        print 'Login failed.'
+        #sys.exit()
+    else:
+        print 'Login as '+userstatus[1]+' successfully.'
+    open("cookies", "w").write('[COOKIES]\nsess_id = '+sess_id_+'\nsess_id_usa = '+sess_id_usa+'\nauth = '+auth)
+		
 
 if __name__ == '__main__':
     try:

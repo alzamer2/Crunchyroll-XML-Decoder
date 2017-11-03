@@ -13,7 +13,6 @@ import re
 import shutil
 import subprocess
 import sys
-import requests
 #import HTMLParser
 
 import altfuncs
@@ -35,7 +34,6 @@ def video():
            '-p', page_url2,
            '-y', filen,
            '-o', os.path.join('export', '{}.flv'.format(title))]
-    print cmd
     if os.name != 'nt':
         cmd.insert(0, 'wine')
     error = subprocess.call(cmd)
@@ -180,7 +178,7 @@ def subtitles(eptitle):
         #shutil.move(eptitle + '.###', os.path.join(os.getcwd(), 'export', ''))
 # ----------
 
-def ultimate(page_url, seasonnum, epnum, sess_id_=''):
+def ultimate(page_url, seasonnum, epnum):
     global url1, url2, filen, title, media_id, lang1, lang2, hardcoded, forceusa, page_url2, onlymainsub
     #global player_revision
 
@@ -217,147 +215,96 @@ Booting up...
             else:
                 page_url = altfuncs.vidurl(page_url, False, False)
 
+    #subprocess.call('title ' + page_url.replace('http://www.crunchyroll.com/', ''), shell=True)
+
     # ----------
 
-    lang1, lang2, forcesub, forceusa, localizecookies, vquality, onlymainsub, connection_n_, proxy_ = altfuncs.config()
-    if sess_id_ == '':
-        from ConfigParser import ConfigParser
-        cookies_ = ConfigParser()
-        cookies_.read('cookies')
-        if forceusa:
-            sess_id_ = cookies_.get('COOKIES', 'sess_id_usa')
-        else:
-            sess_id_ = cookies_.get('COOKIES', 'sess_id')
-    media_id = page_url[-6:]
-    locale_list = ["jaJP","enUS","enGB","arME","frFR","deDE","ptBR","ptPT","esLA","esES","itIT"]
-    stream_data_t_ = ''
-    for i in locale_list:
-        stream_data_t_ += '{"method_version":"0","api_method":"info","params":{"media_id":"'+ media_id +'","locale":"' + i + '","fields":"media.stream_data"}},'
-    ##http://api.crunchyroll.com/batch.0.xml?session_id=cld3qe1t345rnaiy0ciiudkshk4qya5f&requests=[{"method_version":"0","api_method":"info","params":{"media_id":"668505","locale":"jaJP","fields":"media.series_name,media.episode_number,media.name,media.stream_data"}}]
-    #print 'http://api.crunchyroll.com/batch.0.json?session_id=' + sess_id_ +'&requests=[' + data_t_[:-1]+']'
-    media_id_stream_data_ = requests.get('http://api.crunchyroll.com/batch.0.json?session_id=' + sess_id_ +'&requests=[' + stream_data_t_[:-1]+']').json()
-    media_id_hls_url_ = ['','','','','','']
-    media_id_title_ = requests.get('http://api.crunchyroll.com/info.0.json?session_id=' + sess_id_ +'&media_id=' + media_id +  '&fields=media.series_name,media.episode_number,media.name').json()
-    #print media_id_title_,'http://api.crunchyroll.com/info.0.json?session_id=' + sess_id_ +'&media_id=' + media_id +  '&fields=media.series_name,media.episode_number,media.name',forceusa
-    if media_id_title_['code'] == 'ok':
-        title = '%s Episode %s - %s' % (media_id_title_['data']['series_name'], media_id_title_['data']['episode_number'], media_id_title_['data']['name'])
-        if len(os.path.join('export', title+'.flv')) > 255 or media_id_title_['data']['name'] == '':
-            title = '%s Episode %s' % (media_id_title_['data']['series_name'], media_id_title_['data']['episode_number'])
+    #lang1, lang2 = altfuncs.config()
+    #lang1, lang2, forcesub = altfuncs.config()
+    lang1, lang2, forcesub, forceusa, localizecookies, vquality, onlymainsub, connection_n_ = altfuncs.config()
+    #player_revision = altfuncs.playerrev(page_url)
+    html = altfuncs.gethtml(page_url)
+    #htmlfile = open('html.html', 'wb')
+    #htmlfile.write(html.encode('utf-8'))
+    #htmlfile.close()
+    #h = HTMLParser.HTMLParser()
+    title = re.findall('<title>(.+?)</title>', html)[0].replace('Crunchyroll - Watch ', '')
+    #print os.path.join('export', '{}.flv'.format(title))
+    print format('Now Downloading - '+title.encode('utf-8'))
+    #print title
+    if len(os.path.join('export', title+'.flv')) > 255:
+        title = re.findall('^(.+?) \- ', title)[0]
 
-        ### Taken from http://stackoverflow.com/questions/6116978/python-replace-multiple-strings and improved to include the backslash###
-        rep = {' / ': ' - ', '/': ' - ', ':': '-', '?': '.', '"': "''", '|': '-', '&quot;': "''", 'a*G':'a G', '*': '#', u'\u2026': '...', ' \ ': ' - '}
-
-        rep = dict((re.escape(k), v) for k, v in rep.iteritems())
-        pattern = re.compile("|".join(rep.keys()))
-        title = unidecode(pattern.sub(lambda m: rep[re.escape(m.group(0))], title))
+    # title = h.unescape(unidecode(title)).replace('/', ' - ').replace(':', '-').
+    # replace('?', '.').replace('"', "''").replace('|', '-').replace('&quot;',"''").strip()
     
-        ### End stolen code ###
+    ### Taken from http://stackoverflow.com/questions/6116978/python-replace-multiple-strings and improved to include the backslash###
+    rep = {' / ': ' - ', '/': ' - ', ':': '-', '?': '.', '"': "''", '|': '-', '&quot;': "''", 'a*G':'a G', '*': '#', u'\u2026': '...', ' \ ': ' - '}
 
-        # ----------
-        print format('Now Downloading - '+title)
-        if forcesub:
-            pass
-        else:
+    rep = dict((re.escape(k), v) for k, v in rep.iteritems())
+    pattern = re.compile("|".join(rep.keys()))
+    title = unidecode(pattern.sub(lambda m: rep[re.escape(m.group(0))], title))
 
-            if not media_id_stream_data_['data'][0]['body']['data']['stream_data']['hardsub_lang']:
-                for item in media_id_stream_data_['data'][0]['body']['data']['stream_data']['streams']:
-                    if item['quality'] == 'adaptive':
-                        if media_id_hls_url_[5] == '':
-                            media_id_hls_url_[5] = item['url']
-                    elif item['quality'] == 'low':
-                        if media_id_hls_url_[1] == '':
-                            media_id_hls_url_[1] = item['url']
-                    elif item['quality'] == 'mid':
-                        if media_id_hls_url_[2] == '':
-                            media_id_hls_url_[2] = item['url']
-                    elif item['quality'] == 'high':
-                        if media_id_hls_url_[3] == '':
-                            media_id_hls_url_[3] = item['url']
-                    elif item['quality'] == 'ultra':
-                        if media_id_hls_url_[4] == '':
-                            media_id_hls_url_[4] = item['url']
-                    else:
-                        if media_id_hls_url_[0] == '':
-                            media_id_hls_url_[0] = item['url']
-                quality_dic_= ['240p','360p','480p','720p','1080p','highest']
-                #print vquality, quality_dic_.index(vquality),media_id_hls_url_
-                #print media_id_hls_url_[quality_dic_.index(vquality)]
-                if not media_id_hls_url_[quality_dic_.index(vquality)] =='':
-                    media_id_hls_url_select_ = media_id_hls_url_[quality_dic_.index(vquality)]
-                else:
-                    media_id_hls_url_select_ = media_id_hls_url_[5]
-                    if quality_dic_.index(vquality) == 0:
-                        media_id_hls_url_select_=''
-                        for url in media_id_hls_url_:
-                            if media_id_hls_url_select_ == '':
-                                media_id_hls_url_select_ = url
-                video_input = os.path.join("export", title + '.ts')
-                #print media_id_hls_url_.index(media_id_hls_url_select_)
-                heightp = quality_dic_[media_id_hls_url_.index(media_id_hls_url_select_)]
-                if (len(video_input)+10)*connection_n_+len(video_input)+11 > 8191:
-                    connection_n_ = (8191-11-len(video_input))/(len(video_input)+10)
-                video_hls(media_id_hls_url_select_, video_input, connection_n_)
-            else:
-                print 'hardsub, switching to other method'
-                xmlconfig = BeautifulSoup(altfuncs.getxml('RpcApiVideoPlayer_GetStandardConfig', media_id), 'xml')
+    ### End stolen code ###
 
-                try:
-                    if '4' in xmlconfig.find_all('code')[0]:
-                        print xmlconfig.find_all('msg')[0].text
-                        sys.exit()
-                except IndexError:
-                    pass
-
-                vid_id = xmlconfig.find('media_id').string
+    #subprocess.call('title ' + title.replace('&', '^&'), shell=True)
 
     # ----------
 
-                host = xmlconfig.find('host')
-                if host:
-                    host = host.string
+    media_id = page_url[-6:]
+    xmlconfig = BeautifulSoup(altfuncs.getxml('RpcApiVideoPlayer_GetStandardConfig', media_id), 'xml')
+    #xmlfile = open('xmlfile.xml', 'wb')
+    #xmlfile.write(xmlconfig.encode('utf-8'))
+    #xmlfile.close()
+    try:
+        if '4' in xmlconfig.find_all('code')[0]:
+            print xmlconfig.find_all('msg')[0].text
+            sys.exit()
+    except IndexError:
+        pass
 
-                filen = xmlconfig.find('file')
-                if filen:
-                    filen = filen.string
+    vid_id = xmlconfig.find('media_id').string
 
-                if not host and not filen:
-                    print 'Downloading 2 minute preview.'
-                    media_id = xmlconfig.find('media_id').string
-                    xmlconfig = BeautifulSoup(altfuncs.getxml('RpcApiVideoEncode_GetStreamInfo', media_id), 'xml')
-                    host = xmlconfig.find('host').string
-        # ----------
-                if 'subs' in sys.argv:
-                    subtitles(title)
-                    subs_only = True
-                    hardcoded = True  # bleh
-                else:
-                    page_url2 = page_url
-                    if host:
-                        if re.search('fplive\.net', host):
-                            url1 = re.findall('.+/c[0-9]+', host).pop()
-                            url2 = re.findall('c[0-9]+\?.+', host).pop()
-                        else:
-                            url1 = re.findall('.+/ondemand/', host).pop()
-                            url2 = re.findall('ondemand/.+', host).pop()
-                        video()
-                        video_input = os.path.join("export", title + '.flv')
-                    else:
-                        video_input = os.path.join("export", title + '.ts')
-                        if (len(video_input)+10)*connection_n_+len(video_input)+11 > 8191:
-                            connection_n_ = (8191-11-len(video_input))/(len(video_input)+10)
-                        video_hls(filen, video_input, connection_n_)
+    # ----------
 
-                    heightp = '360p' if xmlconfig.height.string == '368' else '{0}p'.format(xmlconfig.height.string)  # This is less likely to fail
+    host = xmlconfig.find('host')
+    if host:
+        host = host.string
+
+    filen = xmlconfig.find('file')
+    if filen:
+        filen = filen.string
+
+    if not host and not filen:
+        print 'Downloading 2 minute preview.'
+        media_id = xmlconfig.find('media_id').string
+        xmlconfig = BeautifulSoup(altfuncs.getxml('RpcApiVideoEncode_GetStreamInfo', media_id), 'xml')
+        host = xmlconfig.find('host').string
 
 
-
+    # ----------
+    if 'subs' in sys.argv:
+        subtitles(title)
+        subs_only = True
+        hardcoded = True  # bleh
     else:
-        sys.exit()
+        page_url2 = page_url
+        if host:
+            if re.search('fplive\.net', host):
+                url1 = re.findall('.+/c[0-9]+', host).pop()
+                url2 = re.findall('c[0-9]+\?.+', host).pop()
+            else:
+                url1 = re.findall('.+/ondemand/', host).pop()
+                url2 = re.findall('ondemand/.+', host).pop()
+            video()
+            video_input = os.path.join("export", title + '.flv')
+        else:
+            video_input = os.path.join("export", title + '.ts')
+            video_hls(filen, video_input, connection_n_)
 
+        heightp = '360p' if xmlconfig.height.string == '368' else '{0}p'.format(xmlconfig.height.string)  # This is less likely to fail
+        subtitles(title)
 
-
-    subtitles(title)
-    if not 'subs' in sys.argv:
         print 'Starting mkv merge'
         mkvmerge = os.path.join("video-engine", "mkvmerge.exe")
         filename_output = os.path.join("export", title + '[' + heightp.strip() +'].mkv')
